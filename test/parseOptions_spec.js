@@ -1,11 +1,8 @@
 var parseOptions = require('../lib/parseOptions.js');
 var assert = require('chai').assert;
-var expect = require('chai').expect;
 
-console.log(expect);
-
-describe('parseOptions', () => {
-    it ('Should parse options', function () {
+describe('parseOptions', function() {
+    it ('Should parse options', function() {
         var optionsString = 'w150-h150-tput_out-fgs';
         var options = parseOptions(optionsString);
 
@@ -15,7 +12,7 @@ describe('parseOptions', () => {
         );
     });
 
-    it ('Should parse multiple filters', function () {
+    it ('Should parse multiple filters', function() {
         var optionsString = 'w150-h150-tput_out-fgs-ff1-ff2-ff3';
         var options = parseOptions(optionsString);
 
@@ -25,7 +22,7 @@ describe('parseOptions', () => {
         );
     });
 
-    it ('Should throw error if option that is not allowed is passed', function () {
+    it ('Should throw error if option that is not allowed is passed', function() {
         assert.throws(function () {
             parseOptions('ab-cd', ['a']);
         }, Error, 'Unexpected param');

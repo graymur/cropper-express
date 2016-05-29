@@ -3,14 +3,13 @@ var path = require('path');
 var fs = require('fs');
 var os = require('os');
 var parseOptions = require('./lib/parseOptions.js');
+var mime = require('mime');
 
 var allowedParams = ['w', 'h', 't', 'm', 's', 'f'];
 
 var defaults = {
-    onSuccess: function (filePath, response) {
-        response.writeHead(200, {
-            'Content-Type' : 'image/jpeg'
-        });
+    onSuccess: function (filePath, response, mimeType) {
+        response.writeHead(200, { 'Content-Type': mimeType });
 
         fs.createReadStream(filePath).pipe(response);
 
@@ -51,7 +50,7 @@ module.exports = function CropperExpressMiddleware(config) {
     }
 
     return function (request, response) {
-        var _, optionsString, options, sourcePath, sourceName, targetFullDir, targetPath, width, height;
+        var _, optionsString, options, sourcePath, sourceName, targetFullDir, targetPath, width, height, mimeType;
         [_, optionsString, sourceName] = request.url.split('/');
 
         targetFullDir = path.normalize(targetDir + '/' + optionsString);
@@ -59,20 +58,26 @@ module.exports = function CropperExpressMiddleware(config) {
 
         // check if file was previously created
         if (fs.existsSync(targetPath)) {
-            return config.onSuccess.call(this, targetPath, response);
+            return config.onSuccess.call(null, targetPath, response, mime.lookup(targetPath));
         }
 
         sourcePath = path.normalize(sourceDir + '/' + sourceName);
 
         // check if source file exists
         if (!fs.existsSync(sourcePath)) {
-            return config.on404.call(this, response);
+            return config.on404.call(null, response);
         }
 
         try {
             options = parseOptions(optionsString, allowedParams);
         } catch (e) {
-            return config.on404.call(this, response);
+            return config.on404.call(null, response);
+        }
+
+        mimeType = mime.lookup(sourcePath);
+
+        if (mimeType.indexOf('image') === -1) {
+            return config.on404.call(null, response);
         }
 
         if (!fs.existsSync(targetFullDir)) {
@@ -84,14 +89,14 @@ module.exports = function CropperExpressMiddleware(config) {
 
         // either width or height has to be defined
         if (!width && !height) {
-            return config.on404.call(this, response);
+            return config.on404.call(null, response);
         }
 
         var cropper = (new Cropper())
-                .setIMPath(config.ImageMagickPath)
-                .setSource(sourcePath)
-                .setTarget(targetPath)
-            ;
+            .setIMPath(config.ImageMagickPath)
+            .setSource(sourcePath)
+            .setTarget(targetPath)
+        ;
 
         // apply resize
         switch (options.t && options.t[0])
@@ -138,11 +143,13 @@ module.exports = function CropperExpressMiddleware(config) {
         });
 
         // execute command end send image
-        cropper.commit()
+        return cropper.commit()
             .then(filePath => {
-                config.onSuccess.call(this, filePath, response);
+                config.onSuccess.call(null, filePath, response, mimeType);
+                return filePath;
             }).catch(error => {
-                config.on500.call(this, response);
+                config.on500.call(null, response);
+                return error;
             });
     }
 };
