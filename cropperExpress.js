@@ -15,10 +15,10 @@ var defaults = {
 
         return response;
     },
-    on404: function (response) {
+    on404: function (request, response, next) {
         return response.status(404).send('Not found');
     },
-    on500: function (response) {
+    on500: function (request, response, next) {
         return response.status(404).send('Not found');
     },
     ImageMagickPath: 'convert'
@@ -49,7 +49,7 @@ module.exports = function CropperExpressMiddleware(config) {
         targetDir = os.tmpdir();
     }
 
-    return function (request, response) {
+    return function (request, response, next) {
         var _, optionsString, options, sourcePath, sourceName, targetFullDir, targetPath, width, height, mimeType;
         [_, optionsString, sourceName] = request.url.split('/');
 
@@ -65,19 +65,19 @@ module.exports = function CropperExpressMiddleware(config) {
 
         // check if source file exists
         if (!fs.existsSync(sourcePath)) {
-            return config.on404.call(null, response);
+            return config.on404.call(null, response, next);
         }
 
         try {
             options = parseOptions(optionsString, allowedParams);
         } catch (e) {
-            return config.on404.call(null, response);
+            return config.on404.call(null, request, response, next);
         }
 
         mimeType = mime.lookup(sourcePath);
 
         if (mimeType.indexOf('image') === -1) {
-            return config.on404.call(null, response);
+            return config.on404.call(null, request, response, next);
         }
 
         if (!fs.existsSync(targetFullDir)) {
@@ -89,14 +89,14 @@ module.exports = function CropperExpressMiddleware(config) {
 
         // either width or height has to be defined
         if (!width && !height) {
-            return config.on404.call(null, response);
+            return config.on404.call(null, request, response, next);
         }
 
         var cropper = (new Cropper())
-            .setIMPath(config.ImageMagickPath)
-            .setSource(sourcePath)
-            .setTarget(targetPath)
-        ;
+                .setIMPath(config.ImageMagickPath)
+                .setSource(sourcePath)
+                .setTarget(targetPath)
+            ;
 
         // apply resize
         switch (options.t && options.t[0])
@@ -148,7 +148,7 @@ module.exports = function CropperExpressMiddleware(config) {
                 config.onSuccess.call(null, filePath, response, mimeType);
                 return filePath;
             }).catch(error => {
-                config.on500.call(null, response);
+                config.on500.call(null, request, response, next);
                 return error;
             });
     }
