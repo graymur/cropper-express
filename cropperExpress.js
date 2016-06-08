@@ -21,7 +21,9 @@ var defaults = {
     on500: function (request, response, next) {
         return response.status(404).send('Not found');
     },
-    ImageMagickPath: 'convert'
+    ImageMagickPath: 'convert',
+    quality: 100,
+    protection: false
 };
 
 module.exports = function CropperExpressMiddleware(config) {
@@ -47,6 +49,12 @@ module.exports = function CropperExpressMiddleware(config) {
         }
     } else {
         targetDir = os.tmpdir();
+    }
+
+    config.quality = Number(config.quality);
+
+    if (isNaN(config.quality) || config.quality < 1 || config.quality > 100) {
+        config.quality = defaults.quality;
     }
 
     return function (request, response, next) {
@@ -93,10 +101,11 @@ module.exports = function CropperExpressMiddleware(config) {
         }
 
         var cropper = (new Cropper())
-                .setIMPath(config.ImageMagickPath)
-                .setSource(sourcePath)
-                .setTarget(targetPath)
-            ;
+            .setIMPath(config.ImageMagickPath)
+            .setSource(sourcePath)
+            .setTarget(targetPath)
+            .setQuality(config.quality)
+        ;
 
         // apply resize
         switch (options.t && options.t[0])
