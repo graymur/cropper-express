@@ -2,8 +2,10 @@ var Cropper = require('cropper');
 var path = require('path');
 var fs = require('fs');
 var os = require('os');
-var parseOptions = require('./lib/parseOptions.js');
 var mime = require('mime');
+var parseOptions = require('./lib/parseOptions.js');
+var objectHash = require('./lib/objectHash.js');
+var nodeUrl = require('url');
 
 var allowedParams = ['w', 'h', 't', 'm', 's', 'f'];
 
@@ -15,15 +17,15 @@ var defaults = {
 
         return response;
     },
-    on404: function (request, response, next) {
+    on404: function (request, response, next, error) {
         return response.status(404).send('Not found');
     },
-    on500: function (request, response, next) {
+    on500: function (request, response, next, error) {
         return response.status(404).send('Not found');
     },
     ImageMagickPath: 'convert',
     quality: 100,
-    protection: false
+    security: false
 };
 
 module.exports = function CropperExpressMiddleware(config) {
@@ -58,8 +60,12 @@ module.exports = function CropperExpressMiddleware(config) {
     }
 
     return function (request, response, next) {
-        var _, optionsString, options, sourcePath, sourceName, targetFullDir, targetPath, width, height, mimeType;
-        [_, optionsString, sourceName] = request.url.split('/');
+        var _, optionsString, options, sourcePath, sourceName, targetFullDir, targetPath, width, height, mimeType, requestUrl;
+
+        requestUrl = nodeUrl.parse(request.url);
+
+        [_, optionsString, sourceName] = requestUrl.pathname.split('/');
+        sourcePath = path.normalize(sourceDir + '/' + sourceName);
 
         targetFullDir = path.normalize(targetDir + '/' + optionsString);
         targetPath = path.normalize(targetFullDir + '/' + sourceName);
@@ -69,7 +75,18 @@ module.exports = function CropperExpressMiddleware(config) {
             return config.onSuccess.call(null, targetPath, response, mime.lookup(targetPath));
         }
 
-        sourcePath = path.normalize(sourceDir + '/' + sourceName);
+        if (config.security) {
+            try {
+                if (!requestUrl.query) throw new Error('Security hash is empty');
+                if (requestUrl.query.length !== 8) throw new Error('Security hash wrong length');
+
+                options = parseOptions(optionsString, allowedParams);
+
+                if (objectHash(options) !== requestUrl.query) throw new Error('Security hash is wrong');
+            } catch (e) {
+                return config.on404.call(null, response, next, e);
+            }
+        }
 
         // check if source file exists
         if (!fs.existsSync(sourcePath)) {
@@ -79,13 +96,13 @@ module.exports = function CropperExpressMiddleware(config) {
         try {
             options = parseOptions(optionsString, allowedParams);
         } catch (e) {
-            return config.on404.call(null, request, response, next);
+            return config.on404.call(null, request, response, next, e);
         }
 
         mimeType = mime.lookup(sourcePath);
 
         if (mimeType.indexOf('image') === -1) {
-            return config.on404.call(null, request, response, next);
+            return config.on404.call(null, request, response, next, new Error('Wrong source mime type'));
         }
 
         if (!fs.existsSync(targetFullDir)) {
@@ -157,7 +174,7 @@ module.exports = function CropperExpressMiddleware(config) {
                 config.onSuccess.call(null, filePath, response, mimeType);
                 return filePath;
             }).catch(error => {
-                config.on500.call(null, request, response, next);
+                config.on500.call(null, request, response, next, error);
                 return error;
             });
     }

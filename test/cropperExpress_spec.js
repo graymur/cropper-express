@@ -1,4 +1,5 @@
 var cropperExpress = require('../cropperExpress.js');
+var generateUrl = require('../lib/generateUrl.js').generateUrl;
 var path = require('path');
 var fs = require('fs');
 
@@ -93,5 +94,22 @@ describe('cropperExpress', function() {
             onSuccessSpy.should.have.been.called.with(filePath, mockResponse, 'image/jpeg');
             done();
         });
+    });
+
+    it('Should check antispam hash', function (done) {
+        var middleware = getMiddleware({ security: true });
+        var url = '/' + generateUrl('sample.jpg', { w: 150 }, '', { security: true });
+
+        return middleware(getMockRequest(url), mockResponse).then(function (filePath) {
+            onSuccessSpy.should.have.been.called.with(filePath, mockResponse, 'image/jpeg');
+            done();
+        });
+    });
+
+    it('Should fail if antispam hash is wrong', function () {
+        var middleware = getMiddleware({ security: true });
+        middleware(getMockRequest('/w150/sample.jpg?fakehash'));
+
+        on404Spy.should.have.been.called();
     });
 });
